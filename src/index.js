@@ -37,7 +37,7 @@ export function extractChannel(input) {
     }
     const segments = parsed.pathname.split("/").filter(Boolean);
     if (!segments.length) throw new ResolverError("INVALID_CHANNEL_URL", "El enlace no contiene un canal de Twitch.", 400);
-    channel = segments[0];
+    channel = segments[0].replace(/\.m3u8$/i, "");
     if (RESERVED_TWITCH_PATHS.has(channel.toLowerCase())) {
       throw new ResolverError("UNSUPPORTED_TWITCH_URL", "Ingresá el enlace directo de un canal en vivo, no una sección, video o página de Twitch.", 400);
     }
@@ -200,6 +200,32 @@ export default {
     }
     if (path === "/api/health" && request.method === "GET") {
       return jsonResponse(request, env, { ok: true, service: "PIVO-TWITCH", version: APP_VERSION });
+    }
+    // Root URL with ?id=... is the player-friendly entry point.
+    // Resolve a fresh Twitch master playlist and redirect to its signed .m3u8 URL.
+    if (path === "/" && request.method === "GET" && (url.searchParams.has("id") || url.searchParams.has("url") || url.searchParams.has("channel"))) {
+      try {
+        const result = await resolveLiveStream(getInputFromRequest(url));
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: result.masterPlaylistUrl,
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Access-Control-Allow-Origin": getCorsHeaders(request, env)["access-control-allow-origin"],
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      } catch (error) {
+        const known = error instanceof ResolverError;
+        return jsonResponse(request, env, {
+          success: false,
+          error: {
+            code: known ? error.code : "INTERNAL_ERROR",
+            message: known ? error.message : "No se pudo resolver el canal.",
+          },
+        }, known ? error.status : 500);
+      }
     }
     if (path === "/api/resolve" && (request.method === "GET" || request.method === "POST")) {
       let body = null;
