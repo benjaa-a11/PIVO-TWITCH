@@ -16,6 +16,7 @@ const originalFetch = globalThis.fetch;
 test("extracts a channel from Twitch mobile, desktop and username inputs", () => {
   assert.equal(extractChannel("https://m.twitch.tv/luzu_tv"), "luzu_tv");
   assert.equal(extractChannel("https://www.twitch.tv/Luzu_TV"), "luzu_tv");
+  assert.equal(extractChannel("https://m.twitch.tv/luzu_tv.m3u8"), "luzu_tv");
   assert.equal(extractChannel("luzu_tv"), "luzu_tv");
   assert.equal(extractChannel("@LUZU_TV"), "luzu_tv");
 });
@@ -75,6 +76,26 @@ test("API reports an offline channel with a useful 404", async () => {
     const body = await response.json();
     assert.equal(response.status, 404);
     assert.equal(body.error.code, "STREAM_OFFLINE");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("root URL redirects directly to a fresh adaptive M3U8 playlist", async () => {
+  globalThis.fetch = async (input) => {
+    if (String(input).includes("gql.twitch.tv")) {
+      return new Response(JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: "test-token", signature: "test-signature" } },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(masterPlaylist, { status: 200 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://pivo.test/?id=https%3A%2F%2Fm.twitch.tv%2Fluzu_tv.m3u8"), {});
+    assert.equal(response.status, 302);
+    assert.match(response.headers.get("location"), /^https:\/\/usher\.ttvnw\.net\/api\/channel\/hls\/luzu_tv\.m3u8\?/);
+    assert.match(response.headers.get("cache-control"), /no-store/);
   } finally {
     globalThis.fetch = originalFetch;
   }
