@@ -26,6 +26,16 @@ https://TU-WORKER.workers.dev?id=https://m.twitch.tv/luzu_tv
 
 ## API
 
+### Redirección directa desde la raíz (ideal para reproductores)
+
+La URL base acepta `id` y responde con un HTTP `302` hacia la playlist master M3U8 firmada y vigente de Twitch:
+
+```text
+https://TU-WORKER.workers.dev/?id=https://m.twitch.tv/luzu_tv.m3u8
+```
+
+El destino final es una URL de Twitch cuyo path termina en `.m3u8`. Se acepta el sufijo `.m3u8` en el enlace del canal y se elimina al validar el nombre del canal. La playlist master contiene las variantes de calidad que Twitch ofrece; el reproductor HLS compatible selecciona y adapta la calidad según las condiciones de reproducción.
+
 ### JSON con URL y variantes
 
 ```http
